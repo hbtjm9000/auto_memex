@@ -10,7 +10,7 @@ import pytest
 
 from .conftest import REPO_ROOT, VAULT
 
-QUERY_SCRIPT = REPO_ROOT / "src" / "query_wiki.py"
+QUERY_SCRIPT = REPO_ROOT / "scripts" / "query_wiki.py"
 
 # Check if hermes is available
 HERMES_AVAILABLE = os.system("which hermes > /dev/null 2>&1") == 0

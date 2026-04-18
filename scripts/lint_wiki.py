@@ -27,14 +27,26 @@ INDEX_PATH = VAULT_PATH / "index.md"
 LOG_PATH = VAULT_PATH / "log.md"
 
 # Directories that are exempt from orphan detection
-EXEMPT_DIRS = {"raw", "queries", "comparisons", "insights"}
+EXEMPT_DIRS = {"raw", "queries", "comparisons", "insights", "_archive"}
 HUB_PAGES = {"index", "readme"}
 
 # Required frontmatter fields
 REQUIRED_FRONTMATTER = {"title", "created", "updated", "type", "tags"}
 
 # Valid page types
-VALID_TYPES = {"entity", "concept", "comparison", "query", "summary", "transcript"}
+VALID_TYPES = {
+    "entity",
+    "concept",
+    "comparison",
+    "query",
+    "summary",
+    "transcript",
+    "index",
+    "schema",
+    "log",
+    "raw",
+    "insight",
+}
 
 # Auto-fixable rules (1-indexed as per spec)
 AUTO_FIXABLE_RULES = {1, 2, 3, 5, 6}
@@ -144,7 +156,7 @@ def scan_vault(vault_path: Path) -> list[Path]:
     md_files = []
     for root, dirs, files in os.walk(vault_path):
         # Skip .obsidian and hidden directories
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "_archive"]
         for f in files:
             if f.endswith(".md"):
                 md_files.append(Path(root) / f)
@@ -169,6 +181,9 @@ def wikilink_target(link_text: str) -> str:
     Handles spaces by converting to underscores and lowercasing.
     [[Data Breaches]] -> data_breaches -> data-breaches
     """
+    # Remove trailing .md if present (case-insensitive)
+    if link_text.lower().endswith(".md"):
+        link_text = link_text[:-3]
     # Remove namespace prefix if present
     if "/" in link_text:
         link_text = link_text.split("/")[-1]
@@ -345,6 +360,11 @@ def check_broken_links(files: list[Path], graph: LinkGraph, vault_path: Path) ->
     issues = []
 
     for f in files:
+        # Skip exempt directories
+        rel_path = f.relative_to(vault_path)
+        if any(part in EXEMPT_DIRS for part in rel_path.parts):
+            continue
+
         outbound = graph.outbound.get(f, set())
 
         for link in outbound:
@@ -356,6 +376,15 @@ def check_broken_links(files: list[Path], graph: LinkGraph, vault_path: Path) ->
             for variant in link_variants:
                 # Check if any file stem matches
                 for md_file in files:
+                    # Skip exempt directories for the target file as well?
+                    # We want to allow linking to exempt directories? Probably not, but we are checking existence.
+                    # We'll check all files for now, but we could skip exempt dirs for the target too.
+                    # However, note that the archived log is in _archive and we don't want to consider it as a valid target for a wikilink?
+                    # Actually, we might want to link to the archived log? But it's just a record.
+                    # We'll skip exempt dirs for the target as well to be consistent.
+                    target_rel_path = md_file.relative_to(vault_path)
+                    if any(part in EXEMPT_DIRS for part in target_rel_path.parts):
+                        continue
                     file_stem = (
                         md_file.stem.replace(" ", "_").replace("-", "_").lower().replace("_", "-")
                     )
@@ -400,7 +429,10 @@ def check_index_completeness(files: list[Path], vault_path: Path) -> list[Issue]
 
     # Get all pages
     for f in files:
+        # Skip exempt directories
         rel_path = f.relative_to(vault_path)
+        if any(part in EXEMPT_DIRS for part in rel_path.parts):
+            continue
 
         # Skip index itself
         if rel_path.stem.lower() == "index":

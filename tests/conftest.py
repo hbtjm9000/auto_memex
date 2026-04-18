@@ -13,12 +13,12 @@ QUEUE = VAULT / "content_queue.json"
 INDEX = VAULT / "index.md"
 LOG = VAULT / "log.md"
 
-# Path to lint_wiki.py - use repo structure for CI compatibility
+# Path to lint_wiki.py - use skill scripts location
 REPO_ROOT = Path(__file__).parent.parent
-LINT_SCRIPT = REPO_ROOT / "src" / "lint_wiki.py"
-INGEST_SCRIPT = REPO_ROOT / "src" / "ingest_source.py"
-QUEUE_MANAGER = REPO_ROOT / "src" / "queue_manager.py"
-WORKER_SCRIPT = REPO_ROOT / "src" / "worker.sh"
+LINT_SCRIPT = REPO_ROOT / "scripts" / "lint_wiki.py"
+INGEST_SCRIPT = REPO_ROOT / "scripts" / "ingest_source.py"
+QUEUE_MANAGER = REPO_ROOT / "scripts" / "queue_manager.py"
+WORKER_SCRIPT = REPO_ROOT / "scripts" / "worker.sh"
 
 
 @pytest.fixture

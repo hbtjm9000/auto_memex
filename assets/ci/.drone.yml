@@ -1,0 +1,30 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: lint
+    image: ruff/ruff
+    commands:
+      - ruff check src/ tests/
+      - ruff format --check src/ tests/
+
+  - name: test
+    image: python:3.14-slim
+    commands:
+      - pip install pytest pytest-cov pyyaml
+      - pytest tests/ -v --tb=short --cov=src --cov-report=term-missing
+    depends_on:
+      - lint
+
+  - name: coverage
+    image: python:3.14-slim
+    commands:
+      - true
+    depends_on:
+      - test
+
+trigger:
+  event:
+    - push
+    - pull_request
