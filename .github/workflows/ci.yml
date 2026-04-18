@@ -64,6 +64,12 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-      - name: Push changes
+      - name: Check for changes
+        id: check
         run: |
-          git push origin master
+          if git diff --quiet HEAD~1 HEAD; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "no_changes=false" >> $GITHUB_OUTPUT
+            git push origin master
+          fi
