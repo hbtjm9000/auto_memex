@@ -2,18 +2,23 @@
 conftest.py - Shared pytest fixtures for LLM-Wiki V2 test suite.
 """
 
-import json
 import os
-import shutil
-import tempfile
 from pathlib import Path
 
 import pytest
 
-VAULT = Path("/home/hbtjm/library")
+# Use environment variable for vault path, default to local development path
+VAULT = Path(os.environ.get("WIKI_VAULT", Path.home() / "library"))
 QUEUE = VAULT / "content_queue.json"
 INDEX = VAULT / "index.md"
 LOG = VAULT / "log.md"
+
+# Path to lint_wiki.py - use repo structure for CI compatibility
+REPO_ROOT = Path(__file__).parent.parent
+LINT_SCRIPT = REPO_ROOT / "src" / "lint_wiki.py"
+INGEST_SCRIPT = REPO_ROOT / "src" / "ingest_source.py"
+QUEUE_MANAGER = REPO_ROOT / "src" / "queue_manager.py"
+WORKER_SCRIPT = REPO_ROOT / "src" / "worker.sh"
 
 
 @pytest.fixture
@@ -26,23 +31,23 @@ def VAULT_PATH():
 def temp_page():
     """
     Fixture to create and automatically clean up a temp wiki page.
-    
+
     Usage:
         def test_something(temp_page):
             path = temp_page("concepts", "test-page", "# Test content")
             # ... test code runs ...
             # ... automatic cleanup happens after test ...
-    
+
     Args:
         subdir: Subdirectory under vault (e.g., "concepts", "entities")
         filename: Filename without extension (extension .md is added)
         content: Full file content including frontmatter
-    
+
     Yields:
         Path to the created temp file
     """
     created_files = []
-    
+
     def _create_page(subdir: str, filename: str, content: str) -> Path:
         subdir_path = VAULT / subdir
         subdir_path.mkdir(parents=True, exist_ok=True)
@@ -50,9 +55,9 @@ def temp_page():
         file_path.write_text(content)
         created_files.append(file_path)
         return file_path
-    
+
     yield _create_page
-    
+
     # Cleanup after test
     for file_path in created_files:
         if file_path.exists():
@@ -63,11 +68,11 @@ def temp_page():
 def clean_queue():
     """
     Fixture to save and restore queue state around a test.
-    
+
     Usage:
         def test_something(clean_queue):
             # ... test runs with queue restored after ...
-    
+
     Yields:
         None
     """
@@ -75,9 +80,9 @@ def clean_queue():
     queue_backup = None
     if QUEUE.exists():
         queue_backup = QUEUE.read_text()
-    
+
     yield
-    
+
     # Restore queue state after test
     if queue_backup is not None:
         QUEUE.write_text(queue_backup)
@@ -89,16 +94,16 @@ def clean_queue():
 def clean_index():
     """
     Fixture to save and restore index.md around a test.
-    
+
     Yields:
         None
     """
     index_backup = None
     if INDEX.exists():
         index_backup = INDEX.read_text()
-    
+
     yield
-    
+
     if index_backup is not None:
         INDEX.write_text(index_backup)
     elif INDEX.exists():
@@ -124,12 +129,42 @@ sources: []
 def taxonomy_tags():
     """Return the set of valid tags from SCHEMA.md."""
     return {
-        "ai", "ml", "cloud", "security", "devops", "networking",
-        "virtualization", "msp", "mssp", "saas", "consulting",
-        "managed-services", "pricing", "sla", "zero-trust", "iam",
-        "edr", "sip", "vulnerability", "compliance", "incident-response",
-        "ci/cd", "microservices", "api", "containerization", "iac",
-        "monitoring", "backup", "dr", "rmm", "psa", "ticketing",
-        "automation", "comparison", "timeline", "trend", "prediction",
-        "vendor-review"
+        "ai",
+        "ml",
+        "cloud",
+        "security",
+        "devops",
+        "networking",
+        "virtualization",
+        "msp",
+        "mssp",
+        "saas",
+        "consulting",
+        "managed-services",
+        "pricing",
+        "sla",
+        "zero-trust",
+        "iam",
+        "edr",
+        "sip",
+        "vulnerability",
+        "compliance",
+        "incident-response",
+        "ci/cd",
+        "microservices",
+        "api",
+        "containerization",
+        "iac",
+        "monitoring",
+        "backup",
+        "dr",
+        "rmm",
+        "psa",
+        "ticketing",
+        "automation",
+        "comparison",
+        "timeline",
+        "trend",
+        "prediction",
+        "vendor-review",
     }

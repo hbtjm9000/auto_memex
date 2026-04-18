@@ -4,22 +4,17 @@ test_filename_norm.py - Tests for filename normalization in worker.sh.
 
 import json
 import subprocess
-import os
-from pathlib import Path
 
-import pytest
-
-VAULT = Path("/home/hbtjm/library")
-QUEUE = VAULT / "content_queue.json"
+from .conftest import INGEST_SCRIPT, QUEUE, VAULT, WORKER_SCRIPT
 
 
 def run_worker():
     """Run the worker.sh script and return the result."""
     result = subprocess.run(
-        ["bash", str(Path.home() / "Riki" / "Utils" / "worker.sh")],
+        ["bash", str(WORKER_SCRIPT)],
         capture_output=True,
         text=True,
-        cwd=str(VAULT)
+        cwd=str(VAULT),
     )
     return result
 
@@ -30,8 +25,11 @@ def normalize_title_to_filename(title):
     This is what the worker SHOULD do.
     """
     import re
+
     # Lowercase first
     name = title.lower()
+    # Replace dots with hyphens (so titles like "watch.md" become "watch-md")
+    name = name.replace(".", "-")
     # Replace spaces with hyphens
     name = name.replace(" ", "-")
     # Replace & with 'and'
@@ -52,16 +50,17 @@ def test_double_extension_not_created(temp_page, clean_queue):
     """
     # Check the existing problematic file
     double_ext_file = VAULT / "concepts" / "watch.md.md"
-    
+
     # If the file exists, it violates the convention
     # After fix, running worker on a task with title 'watch.md' should NOT produce 'watch.md.md'
     if double_ext_file.exists():
         # This is the bug we're testing FOR
-        assert False, f"Double extension file exists: {double_ext_file}"
-    
+        raise AssertionError(f"Double extension file exists: {double_ext_file}")
+
     # The normalize function should never produce .md.md
+    # Dots become hyphens: "watch.md" -> "watch-md.md", "test.md file" -> "test-md-file.md"
     assert normalize_title_to_filename("watch.md") == "watch-md.md"
-    assert normalize_title_to_filename("test.md file") == "testmd-file.md"
+    assert normalize_title_to_filename("test.md file") == "test-md-file.md"
 
 
 def test_spaces_become_hyphens(temp_page, clean_queue):
@@ -74,28 +73,32 @@ def test_spaces_become_hyphens(temp_page, clean_queue):
     with open(QUEUE) as f:
         queue_before = json.load(f)
     count_before = len(queue_before)
-    
+
     # Enqueue a task with spaces in title
     result = subprocess.run(
         [
-            "python3", str(Path.home() / "Riki" / "Utils" / "ingest_source.py"),
-            "--url", "https://example.com/data-breaches-article",
-            "--type", "concept",
-            "--title", "Data Breaches"
+            "python3",
+            str(INGEST_SCRIPT),
+            "--url",
+            "https://example.com/data-breaches-article",
+            "--type",
+            "concept",
+            "--title",
+            "Data Breaches",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
     assert result.returncode == 0, f"Enqueue failed: {result.stderr}"
-    
+
     # Read queue after
     with open(QUEUE) as f:
         queue_after = json.load(f)
-    
+
     assert len(queue_after) == count_before + 1, "Task not added to queue"
     task = queue_after[-1]
     assert task["title"] == "Data Breaches"
-    
+
     # The filename should normalize spaces to hyphens
     expected_filename = normalize_title_to_filename(task["title"])
     assert " " not in expected_filename, f"Spaces not replaced: {expected_filename}"
@@ -111,22 +114,26 @@ def test_special_chars_removed(temp_page, clean_queue):
     # Enqueue task
     result = subprocess.run(
         [
-            "python3", str(Path.home() / "Riki" / "Utils" / "ingest_source.py"),
-            "--url", "https://example.com/ai-ml-basics",
-            "--type", "concept",
-            "--title", "AI & ML Basics"
+            "python3",
+            str(INGEST_SCRIPT),
+            "--url",
+            "https://example.com/ai-ml-basics",
+            "--type",
+            "concept",
+            "--title",
+            "AI & ML Basics",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
     assert result.returncode == 0, f"Enqueue failed: {result.stderr}"
-    
+
     with open(QUEUE) as f:
         queue_after = json.load(f)
-    
+
     task = queue_after[-1]
     normalized = normalize_title_to_filename(task["title"])
-    
+
     # Should have no &, no spaces, no special chars except hyphens
     assert "&" not in normalized
     assert " " not in normalized

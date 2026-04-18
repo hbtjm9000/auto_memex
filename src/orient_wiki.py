@@ -11,12 +11,14 @@ Produces a structured, read-only summary of the vault state:
 Exit code: 0 always (idempotent read operation)
 """
 
-import sys
+import os
 import re
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
-VAULT_ROOT = Path("/home/hbtjm/library")
+# Use environment variable for vault path, default to local development path
+VAULT_ROOT = Path(os.environ.get("WIKI_VAULT", Path.home() / "library"))
 SCHEMA_PATH = VAULT_ROOT / "SCHEMA.md"
 INDEX_PATH = VAULT_ROOT / "index.md"
 LOG_PATH = VAULT_ROOT / "log.md"
@@ -85,7 +87,7 @@ def main() -> int:
             if line.strip().startswith("- "):
                 conventions.append(line.strip().lstrip("- ").strip())
         print(f"\n[DOMAIN] {domain}")
-        print(f"\n[CONVENTIONS]")
+        print("\n[CONVENTIONS]")
         for c in conventions[:8]:
             print(f"  - {c}")
     else:
@@ -93,7 +95,7 @@ def main() -> int:
 
     # --- Page inventory from index.md ---
     index_content = read_file(INDEX_PATH)
-    print(f"\n[INDEX STATUS]")
+    print("\n[INDEX STATUS]")
     if index_content:
         # Extract the "Total pages: N" from index
         total_match = re.search(r"Total pages:\s*(\d+)", index_content)
@@ -107,14 +109,14 @@ def main() -> int:
         print("  index.md is empty or missing")
 
     # --- File counts ---
-    print(f"\n[FILE COUNTS]")
+    print("\n[FILE COUNTS]")
     counts = count_files()
     for d, c in counts.items():
         print(f"  {d}/: {c} .md files")
     print(f"  Total: {sum(counts.values())} .md files")
 
     # --- Recent activity from log.md ---
-    print(f"\n[RECENT ACTIVITY]")
+    print("\n[RECENT ACTIVITY]")
     log_content = read_file(LOG_PATH)
     if log_content:
         entries = parse_log_entries(log_content, 20)
@@ -129,10 +131,14 @@ def main() -> int:
         print("  log.md not found or empty (no activity logged yet)")
 
     # --- Vault state summary ---
-    print(f"\n[VAULT STATE]")
-    print(f"  Directories: {len([d for d in SUBDIRS if (VAULT_ROOT/d).is_dir()])} configured")
-    print(f"  Empty dirs: {', '.join(d for d in SUBDIRS if (VAULT_ROOT/d).is_dir() and counts.get(d, 0) == 0) or 'none'}")
-    print(f"  index.md populated: {'yes' if 'Entities' in index_content or 'Concepts' in index_content else 'no'}")
+    print("\n[VAULT STATE]")
+    print(f"  Directories: {len([d for d in SUBDIRS if (VAULT_ROOT / d).is_dir()])} configured")
+    print(
+        f"  Empty dirs: {', '.join(d for d in SUBDIRS if (VAULT_ROOT / d).is_dir() and counts.get(d, 0) == 0) or 'none'}"
+    )
+    print(
+        f"  index.md populated: {'yes' if 'Entities' in index_content or 'Concepts' in index_content else 'no'}"
+    )
     print(f"  log.md exists: {'yes' if log_content else 'no'}")
 
     print("\n" + "=" * 60)
