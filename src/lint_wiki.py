@@ -34,7 +34,7 @@ HUB_PAGES = {"index", "readme"}
 REQUIRED_FRONTMATTER = {"title", "created", "updated", "type", "tags"}
 
 # Valid page types
-VALID_TYPES = {"entity", "concept", "comparison", "query", "summary"}
+VALID_TYPES = {"entity", "concept", "comparison", "query", "summary", "transcript"}
 
 # Auto-fixable rules (1-indexed as per spec)
 AUTO_FIXABLE_RULES = {1, 2, 3, 5, 6}
@@ -102,15 +102,24 @@ def parse_schema(schema_path: Path) -> SchemaConfig:
 
     content = schema_path.read_text()
 
-    # Extract tag taxonomy
-    taxonomy_section = re.search(r"## Tag Taxonomy\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
+    # Extract tag taxonomy - handles both old and new format
+    # Match until ## followed by non-# char (not ###) or end of string
+    taxonomy_section = re.search(r"## Tag Taxonomy(.*?)(?=\n## [^#]|\Z)", content, re.DOTALL)
     if taxonomy_section:
         taxonomy_text = taxonomy_section.group(1)
-        # Extract tags from lines like: - Technology: ai, ml, cloud, security...
-        tag_lines = re.findall(r"^\s*-\s*(?:[^:]+):\s*(.+)$", taxonomy_text, re.MULTILINE)
-        for line in tag_lines:
-            tags = re.findall(r"\b([a-z][a-z0-9-]*)\b", line.lower())
-            config.tag_taxonomy.update(tags)
+        # Extract tags from lines like:
+        # - Technology: ai, ml, cloud...
+        # - **AI/ML**: ai, ml, ai-research...
+        # Just look for any line starting with "- " and extract comma-separated tags
+        for line in taxonomy_text.split("\n"):
+            line = line.strip()
+            if line.startswith("- "):
+                # Remove bold formatting and category prefix
+                line = re.sub(r"^-\s*\*\*[^*]+\*\*\s*:\s*", "", line)  # Remove **Category**:
+                line = re.sub(r"^-\s*[^:]+:\s*", "", line)  # Remove Category:
+                # Extract tags (lowercase alphanumeric with hyphens)
+                tags = re.findall(r"\b([a-z][a-z0-9-]*)\b", line.lower())
+                config.tag_taxonomy.update(tags)
 
     # Extract stale_days threshold
     stale_match = re.search(r"stale.*?(\d+)\s*days?", content, re.IGNORECASE)
