@@ -7,8 +7,45 @@ import json
 import os
 import re
 import sys
+import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
+
+
+def compute_quality_score(content: str, title: str = "") -> int:
+    """
+    Compute a quality score (1-100) for content.
+    Uses heuristics: length, structure, uniqueness signals.
+    Replace with fabric/LLM scoring by swapping this function body.
+    """
+    score = 30  # baseline
+
+    # Length signal
+    word_count = len(content.split())
+    if word_count > 500:
+        score += 20
+    elif word_count > 200:
+        score += 10
+
+    # Structure signal (has headings, lists)
+    headings = len(re.findall(r'^#+\s', content, re.MULTILINE))
+    lists = len(re.findall(r'^[\*\-\+]\s', content, re.MULTILINE))
+    score += min(headings * 3, 15)
+    score += min(lists * 1, 15)
+
+    # Title presence
+    if title and len(title) > 5:
+        score += 10
+
+    # URL richness
+    urls = len(re.findall(r'https?://', content))
+    score += min(urls * 2, 10)
+
+    # Penalize very short content
+    if word_count < 50:
+        score = max(score - 20, 1)
+
+    return min(max(score, 1), 100)
 
 # Use environment variable for vault path, default to local development path
 VAULT = Path(os.environ.get("WIKI_VAULT", Path.home() / "library"))
@@ -52,13 +89,17 @@ def is_youtube_url(url):
     return "youtube.com" in parsed.netloc or "youtu.be" in parsed.netloc
 
 
-def enqueue(url, influencer=None, doc_type="concept", title=None):
+def enqueue(url, influencer=None, doc_type="concept", title=None, content=None, quality_score=None):
     """Add a task to the queue."""
     init_queue()
 
     task_id = generate_id()
     title = extract_title(url, title)
     is_youtube = is_youtube_url(url)
+
+    # Compute score if content provided and not already set
+    if quality_score is None and content:
+        quality_score = compute_quality_score(content, title)
 
     task = {
         "id": task_id,
@@ -67,6 +108,7 @@ def enqueue(url, influencer=None, doc_type="concept", title=None):
         "type": doc_type,
         "title": title,
         "status": "Unassigned",
+        "quality_score": quality_score,
     }
 
     if is_youtube:
@@ -95,11 +137,20 @@ def main():
         help="Document type",
     )
     parser.add_argument("--title", help="Explicit title (overrides URL-derived)")
+    parser.add_argument("--content", help="Raw content text to compute quality score")
+    parser.add_argument("--score", type=int, choices=range(1, 101),
+                       help="Quality score 1-100 (auto-computed from --content if omitted)")
 
     args = parser.parse_args()
 
+    # Auto-compute score from content if provided and --score not set
+    score = args.score
+    if score is None and args.content:
+        score = compute_quality_score(args.content, args.title)
+
     try:
-        task_id = enqueue(args.url, args.influencer, args.type, args.title)
+        task_id = enqueue(args.url, args.influencer, args.type, args.title,
+                          quality_score=score)
         print(task_id)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
