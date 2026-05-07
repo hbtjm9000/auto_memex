@@ -4,14 +4,11 @@ These tests verify the keyword search component independently.
 LLM synthesis is tested separately (or skipped in CI without credentials).
 """
 
-import os
 import subprocess
-from pathlib import Path
 
-import pytest
+from scripts.query_wiki import find_relevant_files
 
 from .conftest import REPO_ROOT, VAULT
-from scripts.query_wiki import find_relevant_files
 
 
 def test_find_relevant_files_returns_list():
@@ -43,7 +40,7 @@ def test_find_relevant_files_max_files_param():
     import inspect
     sig = inspect.signature(find_relevant_files)
     params = list(sig.parameters.keys())
-    
+
     assert "max_files" in params, "find_relevant_files should have max_files param"
 
 
@@ -52,7 +49,7 @@ def test_find_relevant_files_case_insensitive():
     results_lower = find_relevant_files("security")
     results_upper = find_relevant_files("SECURITY")
     results_mixed = find_relevant_files("SeCuRiTy")
-    
+
     # All should return results (same underlying search)
     assert isinstance(results_lower, list)
     assert isinstance(results_upper, list)
@@ -68,7 +65,7 @@ def test_find_relevant_files_stop_words_filtered():
         "when was it",
         "where is that",
     ]
-    
+
     for q in stop_word_questions:
         results = find_relevant_files(q)
         assert isinstance(results, list), f"Should handle '{q}' without error"
@@ -78,7 +75,7 @@ def test_find_relevant_files_excludes_index():
     """Verify index.md and SCHEMA.md are excluded from results."""
     results = find_relevant_files("index schema content")
     result_strs = [str(r) for r in results]
-    
+
     # Should not contain index.md or SCHEMA.md
     for path in result_strs:
         assert "index.md" not in path or path.count("index.md") == 0 or True  # permissive

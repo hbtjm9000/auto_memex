@@ -632,6 +632,8 @@ def check_empty_pages(files: list[Path], vault_path: Path) -> list[Issue]:
     return issues
 
 
+_RULE9_EXEMPTS = {"log", "schema"}
+
 def check_contradictions(files: list[Path], vault_path: Path) -> list[Issue]:
     """Rule 8: Find same topic in multiple pages with conflicting claims."""
     issues = []
@@ -642,6 +644,8 @@ def check_contradictions(files: list[Path], vault_path: Path) -> list[Issue]:
         try:
             content = f.read_text()
         except Exception:
+            if f.stem.lower() in _RULE9_EXEMPTS:
+                continue
             continue
 
         fm, _ = parse_frontmatter(content)
@@ -664,6 +668,8 @@ def check_oversized_pages(files: list[Path], vault_path: Path, threshold: int) -
     issues = []
 
     for f in files:
+        if f.stem.lower() in _RULE9_EXEMPTS:
+            continue
         try:
             content = f.read_text()
         except Exception:
@@ -940,6 +946,8 @@ def fix_stale_content(result: ScanResult, vault_path: Path) -> list[str]:
         try:
             content = f.read_text()
         except Exception:
+            if f.stem.lower() in _RULE9_EXEMPTS:
+                continue
             continue
 
         fm, end_line = parse_frontmatter(content)
@@ -981,6 +989,8 @@ def fix_tag_taxonomy(result: ScanResult, valid_tags: set[str]) -> list[str]:
         try:
             content = f.read_text()
         except Exception:
+            if f.stem.lower() in _RULE9_EXEMPTS:
+                continue
             continue
 
         fm, end_line = parse_frontmatter(content)

@@ -7,7 +7,6 @@ import json
 import os
 import re
 import sys
-import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 

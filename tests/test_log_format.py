@@ -58,7 +58,6 @@ def test_log_ingest_has_title():
     """
     Read log.md.
     For each '## [DATE] ingest |' entry, assert something after the |.
-    
     Edge cases:
     - log.md missing: skip (not our file - different edge case)
     - log.md exists but no ingest entries: pass (empty log is valid state)

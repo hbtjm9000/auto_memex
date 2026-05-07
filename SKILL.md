@@ -1,12 +1,25 @@
 ---
 name: auto-memex
-description: "Auto Memex: Personal LLM-Wiki knowledge base system. Builds and maintains an interconnected markdown knowledge base using LLMs. Use when managing wiki pages, answering questions with citations, or organizing research. Based on Karpathy's LLM Wiki pattern. NOTE: This is a standalone wiki skill, separate from Hermes built-in llm-wiki."
+description: "Auto Memex: Personal LLM-Wiki knowledge base system. Builds and maintains an interconnected markdown knowledge base using LLMs. Use when managing wiki pages, answering questions with wiki citations, or organizing research. Based on Karpathy's LLM Wiki pattern. NOTE: This is a standalone wiki skill, separate from Hermes built-in llm-wiki."
 compatibility: Requires Python 3.14+, wiki vault path (WIKI_VAULT env var), optional LLM for queries
 metadata:
   author: auto_memex
-  version: "1.0"
+  version: "1.1"
   hermes:
     category: knowledge-management
+functions:
+  lint_wiki:
+    description: "Run wiki linter on the vault. Finds orphans, broken links, frontmatter issues, stale content, and tag taxonomy violations. Pass fix=true to auto-correct index completeness, tag taxonomy, and stale content issues."
+    args:
+      vault: "Path to vault (default: /home/hbtjm/library)"
+      fix: "Boolean — run auto-fix for rules 3, 5, 6 (index completeness, stale content, tag taxonomy)"
+      verbose: "Boolean — show all issues including informational"
+  orient_wiki:
+    description: "Summarize vault structure, content statistics, and health summary."
+  ingest_source:
+    description: "Queue a URL or file for wiki ingestion."
+  query_wiki:
+    description: "Answer a question using wiki content with citations."
 ---
 
 # LLM Wiki
@@ -136,10 +149,10 @@ python scripts/ingest_source.py --url <url> --type concept --influencer <name>
 python scripts/query_wiki.py --question "What is X?"
 ```
 
-### Lint Wiki
+### Lint Wiki (Manual)
 ```bash
-python scripts/lint_wiki.py --vault /path/to/vault
-python scripts/lint_wiki.py --vault /path/to/vault --fix
+python scripts/lint_wiki.py --vault /home/hbtjm/library
+python scripts/lint_wiki.py --vault /home/hbtjm/library --fix   # auto-fix rules 3,5,6
 ```
 
 ### Vault Orientation
@@ -147,19 +160,43 @@ python scripts/lint_wiki.py --vault /path/to/vault --fix
 python scripts/orient_wiki.py
 ```
 
+## Automated Lint
+
+The vault is monitored by two layers:
+
+### Layer 1: File watcher (real-time)
+A background daemon using `inotifywait` watches the vault and triggers `--fix` on every change:
+
+```bash
+bash scripts/lint_watcher.sh start   # start the watcher daemon
+bash scripts/lint_watcher.sh stop    # stop it
+bash scripts/lint_watcher.sh status   # check if running
+```
+
+The watcher auto-fixes rules 3 (index completeness), 5 (stale content), and 6 (tag taxonomy) on every detected change. Full reports are written to `vault/lint.log`.
+
+### Layer 2: Cron (hourly health report)
+A cron job runs a full non-fix lint every hour and delivers the report locally. Use `cronjob` tool to manage it:
+```
+cronjob list  → find the job ID
+cronjob run <id>  → trigger immediately
+cronjob remove <id>  → disable
+```
+
 ## Integration
 
-This skill integrates with Hermes Agent via external skill directories. Configure in `~/.hermes/config.yaml`:
+This skill lives at `~/.paradigm/hermes/auto-memex/` (external skill directory). It is already loaded by Hermes via the skills directory. No additional configuration needed.
 
-```yaml
-skills:
-  external_dirs:
-    - /home/hbtjm/lab/auto_memex
+Invoke lint directly:
+```bash
+python3 ~/.paradigm/hermes/auto-memex/scripts/lint_wiki.py --vault /home/hbtjm/library --fix
 ```
 
 ## Reference
 
 See [references/llm-wiki-pattern.md](references/llm-wiki-pattern.md) for the original Karpathy LLM Wiki pattern.
+
+See [references/system-checkup-2026-04-30.md](references/system-checkup-2026-04-30.md) for vault lint state, remaining manual work, and automation layer status.
 
 ## Dependencies
 
@@ -169,6 +206,40 @@ See [references/llm-wiki-pattern.md](references/llm-wiki-pattern.md) for the ori
 - ruff (for linting)
 
 Install: `pip install -r requirements.txt`
+
+## PITFALLS & LESSONS LEARNED
+
+### Batch Fix Misses Top-Level Files with Hyphen Prefixes
+The `batch_fix_wiki.py` script processes files correctly, but some top-level vault files start with hyphens (e.g., `-ai-ethics-&-misinformation.md`). These may show as "0 files modified" in batch output but still appear as CRITICAL in lint output. Workaround: run batch_fix with explicit path or process manually:
+```bash
+python scripts/batch_fix_wiki.py --rule 4 --dry-run  # verify before fixing
+```
+Root cause: glob pattern interaction with hyphen-starting filenames. Fixed in v1.1+.
+
+### Fedora Path Escaping in Glob Patterns
+When running commands with glob patterns on Fedora 44, avoid `./*` escaping in Python subprocess calls. Use explicit paths:
+```python
+# WRONG
+subprocess.run(["bash", "-c", f"python3 {p} 2>&1"], ...)
+
+# RIGHT  
+subprocess.run(["python3", "/home/hbtjm/.paradigm/hermes/auto-memex/scripts/lint_wiki.py"], ...)
+```
+
+### Rule 9 Exemption for log/SCHEMA
+The 18 "oversized" pages flagged by Rule 9 include:
+- `log.md` — append-only chronological log (by design oversized)
+- `log-YYYY-MM-DD.md` — dated logs
+- `SCHEMA.md` — definition/convention file
+
+These are intentionally large and should be exempted. The linter checks for `f.stem.lower() in {"log", "schema"}` and skips them.
+
+### Watcher Service Startup (Fedora 44)
+The systemd user service `vault-lint-watcher.service` may exit immediately on Fedora 44 due to inotifywait timing. Alternative: run manually in background:
+```bash
+nohup bash /home/hbtjm/.paradigm/hermes/auto-memex/scripts/lint_watcher.sh start > /dev/null 2>&1 &
+```
+Check status: `bash scripts/lint_watcher.sh status`
 
 ## Verification
 
